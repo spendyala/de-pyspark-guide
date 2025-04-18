@@ -98,6 +98,23 @@ The environment includes several notebooks covering different aspects of PySpark
    - UDFs in SQL context and performance considerations
    - Optimization techniques specific to Spark SQL
 
+10. **10-Spark-Plan-Analysis.ipynb**
+   - Understanding Spark's logical and physical execution plans
+   - Analyzing plans to identify performance bottlenecks
+   - Optimization techniques for scan operations, joins, and shuffles
+   - Handling data skew and implementing best practices
+   - End-to-end optimization examples with performance comparisons
+
+11. **11-Advanced-Spark-Optimization.ipynb**
+   - Deep dive into logical and physical query plans
+   - Advanced scan operation analysis and tuning
+   - Filter and projection pushdown optimization
+   - Detailed join strategy analysis and selection
+   - Advanced shuffle operation optimization
+   - Data skew detection and handling techniques
+   - Adaptive Query Execution internals
+   - Performance benchmarking across optimization techniques
+
 ## Working with Notebooks
 
 - **Running a cell**: Click a cell and press `Shift+Enter`
@@ -177,7 +194,9 @@ If you're new to PySpark, we recommend this learning path:
 3. Continue with **04-JSON-Processing.ipynb** and **03-Flatten-Complex-Objects.ipynb** for data structures
 4. Study **02-PySpark-Best-Practices.ipynb** for optimization tips
 5. Explore **09-Spark-SQL-Guide.ipynb** for SQL operations and optimization
-6. Dive into **00-PySpark-Internals.ipynb** for how Spark works under the hood
-7. Finally, use **08-Spark-UI-Guide.ipynb** to learn how to monitor and debug your applications
+6. Learn plan analysis with **10-Spark-Plan-Analysis.ipynb** to understand execution optimization
+7. Dive into advanced optimization with **11-Advanced-Spark-Optimization.ipynb** for deeper performance tuning
+8. Study **00-PySpark-Internals.ipynb** for how Spark works under the hood
+9. Finally, use **08-Spark-UI-Guide.ipynb** to learn how to monitor and debug your applications
 
 Happy learning! 
