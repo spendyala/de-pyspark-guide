@@ -1,0 +1,151 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## User-Defined Functions (UDFs)\n",
+        "\n",
+        "User-Defined Functions (UDFs) allow you to define custom column-based functions in Python (or other languages) and apply them to your Spark DataFrames. While powerful, try to use built-in Spark SQL functions when possible, as they are generally more optimized than UDFs.\n",
+        "\n",
+        "Let's create a simple DataFrame to work with."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "from pyspark.sql import SparkSession\n",
+        "from pyspark.sql.functions import col, udf\n",
+        "from pyspark.sql.types import StringType, IntegerType\n",
+        "\n",
+        "# Make sure SparkSession is initialized (it usually is in Jupyter)\n",
+        "# If not, uncomment the next line\n",
+        "# spark = SparkSession.builder.appName(\"UDF Examples\").getOrCreate()\n",
+        "\n",
+        "data = [(\"Alice\", 25), (\"Bob\", 30), (\"Charlie\", 35)]\n",
+        "columns = [\"name\", \"age\"]\n",
+        "df = spark.createDataFrame(data, columns)\n",
+        "\n",
+        "print(\"Original DataFrame:\")\n",
+        "df.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Example 1: Simple String Manipulation UDF\n",
+        "\n",
+        "Let's define a UDF that converts the 'name' column to uppercase."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# 1. Define the Python function\n",
+        "def to_upper_case(s):\n",
+        "  if s is not None:\n",
+        "    return s.upper()\n",
+        "  else:\n",
+        "    return None\n",
+        "\n",
+        "# 2. Register the Python function as a UDF\n",
+        "#    Specify the return type of the UDF\n",
+        "upper_case_udf = udf(to_upper_case, StringType())\n",
+        "\n",
+        "# 3. Apply the UDF to the DataFrame column\n",
+        "df_upper = df.withColumn(\"name_upper\", upper_case_udf(col(\"name\")))\n",
+        "\n",
+        "print(\"DataFrame with Uppercase Name:\")\n",
+        "df_upper.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Example 2: UDF with Multiple Columns and Different Return Type\n",
+        "\n",
+        "Now, let's create a UDF that takes the 'name' and 'age' columns and returns a descriptive string."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# 1. Define the Python function\n",
+        "def describe_person(name, age):\n",
+        "    return f\"{name} is {age} years old.\"\n",
+        "\n",
+        "# 2. Register the UDF\n",
+        "describe_person_udf = udf(describe_person, StringType())\n",
+        "\n",
+        "# 3. Apply the UDF\n",
+        "df_described = df.withColumn(\"description\", describe_person_udf(col(\"name\"), col(\"age\")))\n",
+        "\n",
+        "print(\"DataFrame with Description:\")\n",
+        "df_described.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Example 3: Using UDFs with `spark.sql` (SQL Expressions)\n",
+        "\n",
+        "You can also register UDFs for use directly within Spark SQL queries."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Register the first UDF for SQL use\n",
+        "spark.udf.register(\"SQL_UPPER\", to_upper_case, StringType())\n",
+        "\n",
+        "# Create a temporary view to run SQL queries\n",
+        "df.createOrReplaceTempView(\"people\")\n",
+        "\n",
+        "# Use the registered UDF in a SQL query\n",
+        "sql_result = spark.sql(\"SELECT SQL_UPPER(name) as upper_name, age FROM people WHERE age > 28\")\n",
+        "\n",
+        "print(\"Result from SQL query using UDF:\")\n",
+        "sql_result.show()\n",
+        "\n",
+        "# Remember to stop the SparkSession if you're done (optional in interactive sessions)\n",
+        "# spark.stop()"
+      ]
+    }
+  ],
+  "metadata": {
+    "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3"
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.10.0"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 4
+} 
