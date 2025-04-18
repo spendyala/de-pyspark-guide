@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  pyspark-notebook:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pyspark_jupyter
+    ports:
+      - "8888:8888" # Map host port 8888 to container port 8888 for Jupyter
+      - "4040:4040" # Map host port 4040 to container port 4040 for Spark UI
+      - "4041:4041" # Map additional Spark UI ports (in case multiple Spark contexts are created)
+      - "4042:4042"
+    volumes:
+      - ./notebooks:/opt/spark/work-dir # Map local ./notebooks directory to container's work directory
+    environment:
+      - JUPYTER_ENABLE_LAB=yes # Enable JupyterLab
+      # Add any other environment variables Spark might need
+      # Example:
+      # - SPARK_MASTER_URL=spark://spark-master:7077
+      # - SPARK_EXECUTOR_MEMORY=1g
+      # - SPARK_DRIVER_MEMORY=1g 

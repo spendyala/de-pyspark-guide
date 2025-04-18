@@ -1,0 +1,78 @@
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+.venv/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+profile_default/
+ipython_config.py
+
+# Data files
+*.csv
+*.parquet
+*.avro
+*.json
+!temp_*.json
+data/
+/tmp/
+*.dat
+*.out
+
+# Spark specific
+derby.log
+metastore_db/
+spark-warehouse/
+*.log
+logs/
+checkpoint/
+_spark_metadata/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# IDE specific
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.env
+.coverage
+htmlcov/
+
+# Temporary files
+temp/
+tmp/
+.~lock.*
+*.bak
+*.backup
+*.tmp
+
+# Keep specific files/dirs (exceptions to above rules)
+!requirements.txt
+!README.md
+!Dockerfile
+!docker-compose.yml 

@@ -1,0 +1,568 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Understanding the Spark UI: A Comprehensive Guide\n",
+        "\n",
+        "The Spark UI is a powerful web interface that provides detailed insights into your Spark application's execution. This notebook will:\n",
+        "\n",
+        "1. Show you how to access the Spark UI\n",
+        "2. Explain each section of the UI in detail\n",
+        "3. Demonstrate how to use the UI for performance tuning and debugging\n",
+        "4. Provide examples of common patterns and issues visible in the UI\n",
+        "\n",
+        "Let's get started!"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 1. Starting Spark and Accessing the UI\n",
+        "\n",
+        "By default, when you create a SparkSession, Spark automatically starts a web UI on port 4040. If that port is taken, it will increment to 4041, 4042, and so on."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "from pyspark.sql import SparkSession\n",
+        "from pyspark.sql.functions import col, explode, rand\n",
+        "import time\n",
+        "import os\n",
+        "\n",
+        "# Create events directory if it doesn't exist\n",
+        "# This is needed if you want to enable event logging\n",
+        "os.makedirs(\"/tmp/spark-events\", exist_ok=True)\n",
+        "\n",
+        "# Create a Spark session with a descriptive app name\n",
+        "spark = SparkSession \\\n",
+        "    .builder \\\n",
+        "    .appName(\"Spark UI Guide\") \\\n",
+        "    .config(\"spark.ui.port\", \"4040\") \\\n",
+        "    .config(\"spark.ui.showConsoleProgress\", \"true\") \\\n",
+        "    .config(\"spark.eventLog.enabled\", \"false\") \\\n",
+        "    .getOrCreate()\n",
+        "\n",
+        "print(\"Spark session started!\")\n",
+        "\n",
+        "# Print the UI URL\n",
+        "ui_url = f\"http://localhost:{spark.sparkContext.uiWebUrl.split(':')[-1]}\"\n",
+        "print(f\"\\nSpark UI is available at: {ui_url}\")\n",
+        "print(\"\\nNote: In this container environment, access via http://localhost:4040\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Accessing the Spark UI\n",
+        "\n",
+        "#### Option 1: Direct Browser Access\n",
+        "Open your browser and navigate to http://localhost:4040\n",
+        "\n",
+        "#### Option 2: From JupyterLab Interface\n",
+        "Depending on your JupyterLab setup, you may be able to right-click the URL above and select \"Open Link\"\n",
+        "\n",
+        "#### Option 3: Proxy Access\n",
+        "If you're running this notebook in a remote cluster, you might need to set up port forwarding or use a proxy to access the UI."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 2. Generating Some Data for the UI\n",
+        "\n",
+        "Let's run a few Spark operations to generate interesting data for the UI:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Create a large DataFrame\n",
+        "print(\"Creating test data...\")\n",
+        "df = spark.range(0, 1000000).withColumn(\"random\", rand())\n",
+        "\n",
+        "# Run a few operations to generate UI data\n",
+        "# Operation 1: Simple transformation and action\n",
+        "print(\"\\nRunning operation 1: Simple count...\")\n",
+        "start_time = time.time()\n",
+        "count = df.count()\n",
+        "print(f\"Count: {count}, Time: {time.time() - start_time:.2f} seconds\")\n",
+        "\n",
+        "# Operation 2: Filter and aggregation\n",
+        "print(\"\\nRunning operation 2: Filter and aggregation...\")\n",
+        "start_time = time.time()\n",
+        "result = df.filter(df.random > 0.5).groupBy((df.id % 10).alias(\"group\")).count()\n",
+        "result.show(5)\n",
+        "print(f\"Time: {time.time() - start_time:.2f} seconds\")\n",
+        "\n",
+        "# Operation 3: Join operation (generates shuffle)\n",
+        "print(\"\\nRunning operation 3: Join operation...\")\n",
+        "start_time = time.time()\n",
+        "df2 = spark.range(0, 100).withColumn(\"key\", col(\"id\") % 10)\n",
+        "joined = df.withColumn(\"key\", col(\"id\") % 10).join(df2, \"key\")\n",
+        "joined_count = joined.count()\n",
+        "print(f\"Joined rows: {joined_count}, Time: {time.time() - start_time:.2f} seconds\")\n",
+        "\n",
+        "print(\"\\nYou can now explore the Spark UI to see details about these operations!\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 3. Understanding the Spark UI Tabs\n",
+        "\n",
+        "The Spark UI consists of several tabs, each providing different insights into your application:"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 3.1. Jobs Tab\n",
+        "\n",
+        "The **Jobs** tab shows all the Spark jobs that have run or are running. A job is created whenever an action (like `count()`, `collect()`, or `save()`) is called.\n",
+        "\n",
+        "**Key Components:**\n",
+        "\n",
+        "1. **Event Timeline:** Shows when jobs started and ended\n",
+        "2. **Job Table:** Lists all jobs with their:\n",
+        "   - Description (the action that triggered the job)\n",
+        "   - Submission Time\n",
+        "   - Duration\n",
+        "   - Stages (number of stages in the job)\n",
+        "   - Tasks (number of tasks across all stages)\n",
+        "   - Status (success/failed/running)\n",
+        "\n",
+        "**How to Use It:**\n",
+        "- Identify slow jobs by looking at durations\n",
+        "- Click on a job to see its stages and more details\n",
+        "- Check for failed jobs and examine their error messages\n",
+        "\n",
+        "**Example:** In our code above, each action (`count()`, `show()`) created a job you can now see in the UI."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 3.2. Stages Tab\n",
+        "\n",
+        "The **Stages** tab provides detailed information about each stage within your jobs. A stage is a set of parallel tasks that perform the same computation.\n",
+        "\n",
+        "**Key Components:**\n",
+        "\n",
+        "1. **Stage List:** Shows all stages with details like:\n",
+        "   - Stage ID and description\n",
+        "   - Number of tasks\n",
+        "   - Input and output data sizes\n",
+        "   - Shuffle read/write data sizes\n",
+        "   - Duration\n",
+        "\n",
+        "2. **Stage Details (when you click on a stage):**\n",
+        "   - Task metrics and statistics\n",
+        "   - Task distribution across executors\n",
+        "   - Summary metrics (min/max/median/mean task times)\n",
+        "   - DAG visualization (execution plan)\n",
+        "\n",
+        "**How to Use It:**\n",
+        "- Identify bottlenecks within a job\n",
+        "- Look for data skew (some tasks taking much longer than others)\n",
+        "- Check shuffle read/write sizes for high-data-movement operations\n",
+        "- Analyze the execution plan for optimization opportunities\n",
+        "\n",
+        "**Example:** The join operation in our code created stages with shuffle operations. Examine these to see how data moved between executors."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 3.3. Storage Tab\n",
+        "\n",
+        "The **Storage** tab shows information about cached RDDs and DataFrames.\n",
+        "\n",
+        "**Key Components:**\n",
+        "\n",
+        "1. **RDD/DataFrame List:** Shows all cached datasets with:\n",
+        "   - Name and storage level\n",
+        "   - Size in memory/disk\n",
+        "   - Partition count\n",
+        "   - Fraction cached\n",
+        "\n",
+        "**How to Use It:**\n",
+        "- Verify that your data is properly cached\n",
+        "- Check memory usage of cached datasets\n",
+        "- Evaluate if the right storage level is being used\n",
+        "\n",
+        "Let's cache a DataFrame to see this in action:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Cache a DataFrame\n",
+        "print(\"Caching filtered DataFrame...\")\n",
+        "filtered_df = df.filter(df.random > 0.7)\n",
+        "filtered_df.cache()\n",
+        "\n",
+        "# Force materialization of the cache\n",
+        "count = filtered_df.count()\n",
+        "print(f\"Cached DataFrame has {count} rows\")\n",
+        "\n",
+        "print(\"\\nNow check the Storage tab in the Spark UI!\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 3.4. Executors Tab\n",
+        "\n",
+        "The **Executors** tab provides information about the executors that are running your application.\n",
+        "\n",
+        "**Key Components:**\n",
+        "\n",
+        "1. **Executor Summary:** Shows overall resource usage\n",
+        "2. **Executor List:** Details each executor with:\n",
+        "   - Executor ID and address\n",
+        "   - RDD blocks stored\n",
+        "   - Storage memory usage\n",
+        "   - Task time and counts (active/completed/failed)\n",
+        "   - Shuffle read/write data\n",
+        "   - Log access links\n",
+        "\n",
+        "**How to Use It:**\n",
+        "- Monitor memory usage across executors\n",
+        "- Identify executors with high failure rates\n",
+        "- Check for balanced workload distribution\n",
+        "- Access executor logs for debugging\n",
+        "\n",
+        "**Note:** In local mode, you'll typically see only one executor (the driver), but in a cluster, you'll see multiple executors."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 3.5. SQL Tab\n",
+        "\n",
+        "The **SQL** tab shows details about Spark SQL and DataFrame queries.\n",
+        "\n",
+        "**Key Components:**\n",
+        "\n",
+        "1. **Query List:** Shows all SQL/DataFrame queries with:\n",
+        "   - Description and duration\n",
+        "   - Submission time\n",
+        "   - Associated jobs\n",
+        "\n",
+        "2. **Query Details (when you click on a query):**\n",
+        "   - Physical and logical plans\n",
+        "   - Execution metrics\n",
+        "   - DAG visualization\n",
+        "\n",
+        "**How to Use It:**\n",
+        "- Analyze query plans to understand how Spark is executing your DataFrame operations\n",
+        "- Identify optimization opportunities in query structure\n",
+        "- Link DataFrame operations to the underlying jobs\n",
+        "\n",
+        "Let's run a SQL query to see this in action:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Register a temporary view\n",
+        "df.createOrReplaceTempView(\"data\")\n",
+        "\n",
+        "# Run a SQL query\n",
+        "print(\"Running SQL query...\")\n",
+        "sql_result = spark.sql(\"\"\"\n",
+        "    SELECT \n",
+        "        id % 10 as group_id, \n",
+        "        COUNT(*) as count, \n",
+        "        AVG(random) as avg_random \n",
+        "    FROM data \n",
+        "    GROUP BY group_id \n",
+        "    ORDER BY group_id\n",
+        "\"\"\")\n",
+        "\n",
+        "sql_result.show()\n",
+        "\n",
+        "print(\"\\nNow check the SQL tab in the Spark UI!\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 3.6. Environment Tab\n",
+        "\n",
+        "The **Environment** tab shows configuration information about your Spark application.\n",
+        "\n",
+        "**Key Components:**\n",
+        "\n",
+        "1. **Runtime Information:** Spark version, master URL, start time\n",
+        "2. **Spark Properties:** All configured Spark properties\n",
+        "3. **Runtime Information:** JVM, Scala, and system properties\n",
+        "4. **Classpath Entries:** JAR files and dependencies\n",
+        "\n",
+        "**How to Use It:**\n",
+        "- Verify your configuration settings\n",
+        "- Check resource allocations\n",
+        "- Confirm that required dependencies are loaded"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 4. Using the Spark UI for Performance Tuning\n",
+        "\n",
+        "Now that we understand the components of the Spark UI, let's look at how to use it for performance tuning."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 4.1. Identifying Data Skew\n",
+        "\n",
+        "Data skew occurs when data is unevenly distributed across partitions, causing some tasks to process much more data than others.\n",
+        "\n",
+        "**How to identify it in the UI:**\n",
+        "- In the Stages tab, look for tasks with execution times that are much longer than others\n",
+        "- Check the Summary Metrics section for high variance in task durations\n",
+        "\n",
+        "Let's create a skewed dataset to see this:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Create a skewed dataset where most values are in one partition\n",
+        "from pyspark.sql.functions import when\n",
+        "\n",
+        "# This dataset will be highly skewed to key=0\n",
+        "print(\"Creating skewed dataset...\")\n",
+        "skewed_df = df.withColumn(\n",
+        "    \"skewed_key\", \n",
+        "    when(col(\"random\") < 0.8, 0) # 80% of data has key=0\n",
+        "    .otherwise((col(\"id\") % 9) + 1) # Rest is distributed among keys 1-9\n",
+        ")\n",
+        "\n",
+        "# Run a groupBy operation which will show the skew effect\n",
+        "print(\"Running operation with data skew...\")\n",
+        "start_time = time.time()\n",
+        "skew_result = skewed_df.groupBy(\"skewed_key\").count()\n",
+        "skew_result.show()\n",
+        "print(f\"Time: {time.time() - start_time:.2f} seconds\")\n",
+        "\n",
+        "print(\"\\nExamine the Stages tab and look for tasks with much longer durations!\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 4.2. Analyzing Shuffle Operations\n",
+        "\n",
+        "Shuffle operations (like `groupBy`, `join`, and `repartition`) move data between executors and can be expensive.\n",
+        "\n",
+        "**How to analyze in the UI:**\n",
+        "- In the Stages tab, look for stages with large \"Shuffle Read\" or \"Shuffle Write\" sizes\n",
+        "- Check the task timeline to see if there's a long wait between shuffle write and shuffle read stages\n",
+        "\n",
+        "Let's run an operation with a large shuffle:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Run a complex operation with multiple shuffles\n",
+        "print(\"Running operation with multiple shuffles...\")\n",
+        "\n",
+        "# First, repartition the data\n",
+        "start_time = time.time()\n",
+        "repartitioned = df.repartition(8)\n",
+        "\n",
+        "# Then perform multiple transformations with shuffles\n",
+        "result = repartitioned \\\n",
+        "    .groupBy((col(\"id\") % 5).alias(\"group1\")) \\\n",
+        "    .agg({\"random\": \"avg\"}) \\\n",
+        "    .withColumnRenamed(\"avg(random)\", \"avg_random\") \\\n",
+        "    .join(\n",
+        "        repartitioned.groupBy((col(\"id\") % 7).alias(\"group2\")).count(),\n",
+        "        on=(col(\"group1\") == col(\"group2\"))\n",
+        "    )\n",
+        "\n",
+        "result.show(5)\n",
+        "print(f\"Time: {time.time() - start_time:.2f} seconds\")\n",
+        "\n",
+        "print(\"\\nCheck the Stages tab to see the shuffle read/write metrics!\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### 4.3. Memory Usage and Spills\n",
+        "\n",
+        "When Spark doesn't have enough memory for operations, it spills data to disk, which degrades performance.\n",
+        "\n",
+        "**How to identify in the UI:**\n",
+        "- In the Stages tab, look for tasks with \"Spill (Memory)\" or \"Spill (Disk)\" metrics\n",
+        "- Check the Executors tab for executors with high memory usage\n",
+        "\n",
+        "Let's create a memory-intensive operation:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Create a wide transformation that might cause memory pressure\n",
+        "print(\"Running memory-intensive operation...\")\n",
+        "\n",
+        "# This cartesian join is very memory intensive\n",
+        "df_small1 = spark.range(0, 1000).withColumn(\"key1\", col(\"id\") % 10)\n",
+        "df_small2 = spark.range(0, 1000).withColumn(\"key2\", col(\"id\") % 10)\n",
+        "\n",
+        "# Cartesian product (cross join)\n",
+        "start_time = time.time()\n",
+        "cross_result = df_small1.crossJoin(df_small2).count()\n",
+        "\n",
+        "print(f\"Cross join result count: {cross_result}, Time: {time.time() - start_time:.2f} seconds\")\n",
+        "\n",
+        "print(\"\\nCheck the Stages tab and look for memory spills in the task metrics!\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 5. Common Performance Issues and How to Spot Them in the UI\n",
+        "\n",
+        "### 5.1. Small Files Problem\n",
+        "- **Symptoms in UI**: Large number of very small tasks in a stage\n",
+        "- **Solution**: Use `coalesce` or `repartition` to combine small files\n",
+        "\n",
+        "### 5.2. Data Skew\n",
+        "- **Symptoms in UI**: Few tasks running much longer than others in the same stage\n",
+        "- **Solution**: Add more randomization to partition keys or use salting techniques\n",
+        "\n",
+        "### 5.3. Excessive Shuffling\n",
+        "- **Symptoms in UI**: Stages with large shuffle read/write sizes\n",
+        "- **Solution**: Reduce the number of shuffles, use broadcast joins when possible\n",
+        "\n",
+        "### 5.4. Insufficient Memory\n",
+        "- **Symptoms in UI**: Memory spills, executor failures\n",
+        "- **Solution**: Increase executor memory, adjust memory fractions, optimize algorithms\n",
+        "\n",
+        "### 5.5. Insufficient Parallelism\n",
+        "- **Symptoms in UI**: Few tasks handling large amounts of data\n",
+        "- **Solution**: Increase partition count with `repartition`\n",
+        "\n",
+        "### 5.6. Too Much Parallelism\n",
+        "- **Symptoms in UI**: Many very short tasks with high scheduling overhead\n",
+        "- **Solution**: Reduce partition count with `coalesce`"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 6. Conclusions and Next Steps\n",
+        "\n",
+        "The Spark UI is an invaluable tool for understanding, monitoring, and optimizing your Spark applications. Here's a summary of what we've learned:\n",
+        "\n",
+        "1. **Jobs Tab**: Shows overall execution and helps identify slow or failed jobs\n",
+        "2. **Stages Tab**: Provides detailed metrics on each processing stage, helps find bottlenecks\n",
+        "3. **Storage Tab**: Monitors caching effectiveness and memory usage\n",
+        "4. **Executors Tab**: Shows resource usage and task distribution across executors\n",
+        "5. **SQL Tab**: Helps analyze and optimize DataFrame and SQL operations\n",
+        "6. **Environment Tab**: Verifies configuration and environment setup\n",
+        "\n",
+        "### Best Practices for Using the Spark UI:\n",
+        "\n",
+        "- Start with the **Jobs tab** to get an overview of your application\n",
+        "- Drill down into slow jobs to examine their **stages**\n",
+        "- Check for issues like data skew, memory spills, and excessive shuffling\n",
+        "- Review executor resource usage to ensure efficient cluster utilization\n",
+        "- Save the event logs for post-execution analysis\n",
+        "\n",
+        "### Next Steps for Mastering Spark Performance:\n",
+        "\n",
+        "1. Practice analyzing different types of workloads\n",
+        "2. Learn about Spark Memory Management (storage vs. execution memory)\n",
+        "3. Experiment with different configurations and observe their effects in the UI\n",
+        "4. Use the Spark History Server for analyzing completed applications\n",
+        "5. Combine UI analysis with code optimization techniques\n",
+        "\n",
+        "Remember, the key to performance tuning is measurement and iterative improvement!"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Clean up resources\n",
+        "print(\"Cleaning up...\")\n",
+        "filtered_df.unpersist()\n",
+        "\n",
+        "print(\"\\nThe Spark UI will remain available at http://localhost:4040\")\n",
+        "print(\"as long as this Spark session is active.\")\n",
+        "print(\"\\nIf you want to stop the session, uncomment and run the command below:\")\n",
+        "# spark.stop()"
+      ]
+    }
+  ],
+  "metadata": {
+    "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3"
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.8.8"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 4
+} 

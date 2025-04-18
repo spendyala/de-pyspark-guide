@@ -1,0 +1,598 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# Processing JSON Data in PySpark\n",
+        "\n",
+        "This notebook demonstrates how to read, parse, and extract fields from JSON data using PySpark. We'll cover:\n",
+        "\n",
+        "1. Reading JSON from various sources\n",
+        "2. Extracting fields from JSON structures\n",
+        "3. Working with nested JSON objects\n",
+        "4. Handling JSON arrays\n",
+        "5. Schema inference and explicit schema definition"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "from pyspark.sql import SparkSession\n",
+        "from pyspark.sql.functions import col, explode, from_json, to_json, json_tuple, get_json_object\n",
+        "from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType, MapType, DoubleType\n",
+        "\n",
+        "# Initialize SparkSession\n",
+        "spark = SparkSession.builder.appName(\"JSON Processing\").getOrCreate()\n",
+        "\n",
+        "print(\"SparkSession initialized successfully!\")"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 1. Creating Sample JSON Data\n",
+        "\n",
+        "Let's start by creating some sample JSON data to work with. We'll create JSON strings directly in PySpark."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Simple JSON data\n",
+        "simple_json_data = [\n",
+        "    (1, '{\"name\":\"John\", \"age\":30, \"city\":\"New York\"}'),\n",
+        "    (2, '{\"name\":\"Alice\", \"age\":25, \"city\":\"Los Angeles\"}'),\n",
+        "    (3, '{\"name\":\"Bob\", \"age\":35, \"city\":\"Chicago\"}')\n",
+        "]\n",
+        "\n",
+        "simple_json_df = spark.createDataFrame(simple_json_data, [\"id\", \"json_data\"])\n",
+        "\n",
+        "print(\"Simple JSON DataFrame:\")\n",
+        "simple_json_df.show(truncate=False)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 2. Extracting Fields from JSON Strings\n",
+        "\n",
+        "### Method 1: Using `json_tuple`\n",
+        "\n",
+        "The `json_tuple` function allows extracting multiple fields from a JSON string in one go."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Extract fields using json_tuple\n",
+        "parsed_json_df1 = simple_json_df.select(\n",
+        "    \"id\",\n",
+        "    json_tuple(col(\"json_data\"), \"name\", \"age\", \"city\").alias(\"name\", \"age\", \"city\")\n",
+        ")\n",
+        "\n",
+        "print(\"Parsed JSON using json_tuple:\")\n",
+        "parsed_json_df1.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Method 2: Using `get_json_object`\n",
+        "\n",
+        "The `get_json_object` function extracts a single field at a time using a JSONPath expression."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Extract fields using get_json_object\n",
+        "parsed_json_df2 = simple_json_df.select(\n",
+        "    \"id\",\n",
+        "    get_json_object(col(\"json_data\"), \"$.name\").alias(\"name\"),\n",
+        "    get_json_object(col(\"json_data\"), \"$.age\").alias(\"age\"),\n",
+        "    get_json_object(col(\"json_data\"), \"$.city\").alias(\"city\")\n",
+        ")\n",
+        "\n",
+        "print(\"Parsed JSON using get_json_object:\")\n",
+        "parsed_json_df2.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Method 3: Using `from_json` with Schema\n",
+        "\n",
+        "For more control and type safety, use `from_json` with an explicit schema."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Define schema for the JSON\n",
+        "simple_schema = StructType([\n",
+        "    StructField(\"name\", StringType(), True),\n",
+        "    StructField(\"age\", IntegerType(), True),\n",
+        "    StructField(\"city\", StringType(), True)\n",
+        "])\n",
+        "\n",
+        "# Parse with from_json\n",
+        "parsed_json_df3 = simple_json_df.select(\n",
+        "    \"id\",\n",
+        "    from_json(col(\"json_data\"), simple_schema).alias(\"parsed_data\")\n",
+        ")\n",
+        "\n",
+        "# Extract the struct fields\n",
+        "parsed_json_df3 = parsed_json_df3.select(\n",
+        "    \"id\",\n",
+        "    \"parsed_data.name\",\n",
+        "    \"parsed_data.age\",\n",
+        "    \"parsed_data.city\"\n",
+        ")\n",
+        "\n",
+        "print(\"Parsed JSON using from_json with schema:\")\n",
+        "parsed_json_df3.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 3. Working with Nested JSON\n",
+        "\n",
+        "Now let's handle more complex, nested JSON objects."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Nested JSON data\n",
+        "nested_json_data = [\n",
+        "    (1, '{\"name\":\"John\", \"contact\":{\"email\":\"john@example.com\", \"phone\":\"555-1234\"}, \"address\":{\"city\":\"New York\", \"zip\":\"10001\"}}'),\n",
+        "    (2, '{\"name\":\"Alice\", \"contact\":{\"email\":\"alice@example.com\", \"phone\":\"555-5678\"}, \"address\":{\"city\":\"San Francisco\", \"zip\":\"94105\"}}'),\n",
+        "    (3, '{\"name\":\"Bob\", \"contact\":{\"email\":\"bob@example.com\"}, \"address\":{\"city\":\"Chicago\", \"zip\":\"60601\"}}')\n",
+        "]\n",
+        "\n",
+        "nested_json_df = spark.createDataFrame(nested_json_data, [\"id\", \"json_data\"])\n",
+        "\n",
+        "print(\"Nested JSON DataFrame:\")\n",
+        "nested_json_df.show(truncate=False)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Using `get_json_object` for Nested Fields"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Extract nested fields using get_json_object\n",
+        "parsed_nested_df1 = nested_json_df.select(\n",
+        "    \"id\",\n",
+        "    get_json_object(col(\"json_data\"), \"$.name\").alias(\"name\"),\n",
+        "    get_json_object(col(\"json_data\"), \"$.contact.email\").alias(\"email\"),\n",
+        "    get_json_object(col(\"json_data\"), \"$.contact.phone\").alias(\"phone\"),\n",
+        "    get_json_object(col(\"json_data\"), \"$.address.city\").alias(\"city\"),\n",
+        "    get_json_object(col(\"json_data\"), \"$.address.zip\").alias(\"zip\")\n",
+        ")\n",
+        "\n",
+        "print(\"Parsed nested JSON using get_json_object:\")\n",
+        "parsed_nested_df1.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Using `from_json` with Nested Schema"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Define nested schema\n",
+        "nested_schema = StructType([\n",
+        "    StructField(\"name\", StringType(), True),\n",
+        "    StructField(\"contact\", StructType([\n",
+        "        StructField(\"email\", StringType(), True),\n",
+        "        StructField(\"phone\", StringType(), True)\n",
+        "    ]), True),\n",
+        "    StructField(\"address\", StructType([\n",
+        "        StructField(\"city\", StringType(), True),\n",
+        "        StructField(\"zip\", StringType(), True)\n",
+        "    ]), True)\n",
+        "])\n",
+        "\n",
+        "# Parse nested JSON with schema\n",
+        "parsed_nested_df2 = nested_json_df.select(\n",
+        "    \"id\",\n",
+        "    from_json(col(\"json_data\"), nested_schema).alias(\"data\")\n",
+        ")\n",
+        "\n",
+        "# Flatten the nested structure\n",
+        "flattened_df = parsed_nested_df2.select(\n",
+        "    \"id\",\n",
+        "    \"data.name\",\n",
+        "    \"data.contact.email\",\n",
+        "    \"data.contact.phone\",\n",
+        "    \"data.address.city\",\n",
+        "    \"data.address.zip\"\n",
+        ")\n",
+        "\n",
+        "print(\"Flattened nested JSON using from_json with schema:\")\n",
+        "flattened_df.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 4. Handling JSON Arrays\n",
+        "\n",
+        "JSON data often contains arrays. Let's see how to process them."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# JSON with arrays\n",
+        "array_json_data = [\n",
+        "    (1, '{\"name\":\"John\", \"skills\":[\"Java\", \"Python\", \"SQL\"]}'),\n",
+        "    (2, '{\"name\":\"Alice\", \"skills\":[\"C++\", \"JavaScript\"]}'),\n",
+        "    (3, '{\"name\":\"Bob\", \"skills\":[]}')\n",
+        "]\n",
+        "\n",
+        "array_json_df = spark.createDataFrame(array_json_data, [\"id\", \"json_data\"])\n",
+        "\n",
+        "print(\"JSON with Arrays:\")\n",
+        "array_json_df.show(truncate=False)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Parsing Arrays with Schema and Exploding"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Define schema with array\n",
+        "array_schema = StructType([\n",
+        "    StructField(\"name\", StringType(), True),\n",
+        "    StructField(\"skills\", ArrayType(StringType()), True)\n",
+        "])\n",
+        "\n",
+        "# Parse JSON with array\n",
+        "parsed_array_df = array_json_df.select(\n",
+        "    \"id\",\n",
+        "    from_json(col(\"json_data\"), array_schema).alias(\"data\")\n",
+        ")\n",
+        "\n",
+        "# Extract fields\n",
+        "parsed_array_df = parsed_array_df.select(\n",
+        "    \"id\",\n",
+        "    \"data.name\",\n",
+        "    \"data.skills\"\n",
+        ")\n",
+        "\n",
+        "print(\"Parsed JSON with arrays:\")\n",
+        "parsed_array_df.show(truncate=False)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Exploding Arrays\n",
+        "\n",
+        "We can use `explode` to convert array elements into separate rows."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Filter out empty arrays to avoid explode issues\n",
+        "non_empty_skills_df = parsed_array_df.filter(col(\"skills\").isNotNull() & (size(col(\"skills\")) > 0))\n",
+        "\n",
+        "# Explode the skills array\n",
+        "exploded_skills_df = non_empty_skills_df.select(\n",
+        "    \"id\",\n",
+        "    \"name\",\n",
+        "    explode(\"skills\").alias(\"skill\")\n",
+        ")\n",
+        "\n",
+        "print(\"Exploded skills array:\")\n",
+        "exploded_skills_df.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 5. Complex JSON with Arrays of Objects\n",
+        "\n",
+        "Let's handle even more complex JSON with arrays of objects."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# JSON with array of objects\n",
+        "complex_json_data = [\n",
+        "    (1, '{\"name\":\"John\", \"courses\":[{\"name\":\"Python\", \"score\":95}, {\"name\":\"SQL\", \"score\":87}]}'),\n",
+        "    (2, '{\"name\":\"Alice\", \"courses\":[{\"name\":\"Java\", \"score\":90}, {\"name\":\"JavaScript\", \"score\":85}]}'),\n",
+        "    (3, '{\"name\":\"Bob\", \"courses\":[]}')\n",
+        "]\n",
+        "\n",
+        "complex_json_df = spark.createDataFrame(complex_json_data, [\"id\", \"json_data\"])\n",
+        "\n",
+        "print(\"Complex JSON with arrays of objects:\")\n",
+        "complex_json_df.show(truncate=False)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "### Parsing and Exploding Arrays of Objects"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "from pyspark.sql.functions import size\n",
+        "\n",
+        "# Define complex schema\n",
+        "course_schema = StructType([\n",
+        "    StructField(\"name\", StringType(), True),\n",
+        "    StructField(\"score\", IntegerType(), True)\n",
+        "])\n",
+        "\n",
+        "complex_schema = StructType([\n",
+        "    StructField(\"name\", StringType(), True),\n",
+        "    StructField(\"courses\", ArrayType(course_schema), True)\n",
+        "])\n",
+        "\n",
+        "# Parse complex JSON\n",
+        "parsed_complex_df = complex_json_df.select(\n",
+        "    \"id\",\n",
+        "    from_json(col(\"json_data\"), complex_schema).alias(\"data\")\n",
+        ")\n",
+        "\n",
+        "parsed_complex_df = parsed_complex_df.select(\n",
+        "    \"id\",\n",
+        "    \"data.name\",\n",
+        "    \"data.courses\"\n",
+        ")\n",
+        "\n",
+        "print(\"Parsed complex JSON:\")\n",
+        "parsed_complex_df.show(truncate=False)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Filter out empty arrays\n",
+        "non_empty_courses_df = parsed_complex_df.filter(col(\"courses\").isNotNull() & (size(col(\"courses\")) > 0))\n",
+        "\n",
+        "# Explode courses array\n",
+        "exploded_courses_df = non_empty_courses_df.select(\n",
+        "    \"id\",\n",
+        "    \"name\",\n",
+        "    explode(\"courses\").alias(\"course\")\n",
+        ")\n",
+        "\n",
+        "# Extract fields from the exploded struct\n",
+        "final_courses_df = exploded_courses_df.select(\n",
+        "    \"id\",\n",
+        "    \"name\",\n",
+        "    \"course.name\".alias(\"course_name\"),\n",
+        "    \"course.score\"\n",
+        ")\n",
+        "\n",
+        "print(\"Final exploded courses:\")\n",
+        "final_courses_df.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 6. Reading JSON Files\n",
+        "\n",
+        "In real applications, you often need to read JSON from files. Here's how to do it:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# First, let's write some sample data to a JSON file\n",
+        "simple_json_df.write.mode(\"overwrite\").json(\"/tmp/sample.json\")\n",
+        "\n",
+        "# Reading JSON files\n",
+        "# With schema inference\n",
+        "json_file_df = spark.read.json(\"/tmp/sample.json\")\n",
+        "print(\"JSON read from file with inferred schema:\")\n",
+        "json_file_df.printSchema()\n",
+        "json_file_df.show()"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Reading with explicit schema\n",
+        "file_schema = StructType([\n",
+        "    StructField(\"id\", IntegerType(), False),\n",
+        "    StructField(\"json_data\", StringType(), True)\n",
+        "])\n",
+        "\n",
+        "# Reading with options\n",
+        "json_file_df2 = spark.read.option(\"multiLine\", \"true\").schema(file_schema).json(\"/tmp/sample.json\")\n",
+        "print(\"JSON read from file with explicit schema:\")\n",
+        "json_file_df2.show()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 7. Converting Dataframe to JSON\n",
+        "\n",
+        "We can also convert DataFrames back to JSON format."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Convert DataFrame to JSON string\n",
+        "from pyspark.sql.functions import struct, to_json\n",
+        "\n",
+        "# Create a sample DataFrame\n",
+        "data_for_json = [\n",
+        "    (1, \"John\", 30, \"New York\"),\n",
+        "    (2, \"Alice\", 25, \"San Francisco\"),\n",
+        "    (3, \"Bob\", 35, \"Chicago\")\n",
+        "]\n",
+        "df_for_json = spark.createDataFrame(data_for_json, [\"id\", \"name\", \"age\", \"city\"])\n",
+        "\n",
+        "# Convert to JSON string\n",
+        "json_output_df = df_for_json.select(\n",
+        "    \"id\",\n",
+        "    to_json(struct(\"name\", \"age\", \"city\")).alias(\"person_json\")\n",
+        ")\n",
+        "\n",
+        "print(\"DataFrame converted to JSON strings:\")\n",
+        "json_output_df.show(truncate=False)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 8. Schema Inference for JSON\n",
+        "\n",
+        "PySpark can infer the schema from JSON data, which is useful for exploration."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "# Using schema inference with samplingRatio\n",
+        "inferred_df = spark.read.option(\"samplingRatio\", \"0.8\").json(\"/tmp/sample.json\")\n",
+        "\n",
+        "print(\"Inferred schema from JSON:\")\n",
+        "inferred_df.printSchema()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## Summary: Best Practices for JSON Processing\n",
+        "\n",
+        "1. **For simple JSON extraction:**\n",
+        "   - Use `json_tuple` for extracting multiple fields at once\n",
+        "   - Use `get_json_object` for extracting specific fields with JSONPath\n",
+        "\n",
+        "2. **For complex JSON structures:**\n",
+        "   - Define explicit schemas with `StructType` and use `from_json`\n",
+        "   - Handle nested structures with dot notation\n",
+        "   - Use `explode` for arrays\n",
+        "\n",
+        "3. **Performance considerations:**\n",
+        "   - Schema inference is convenient but can be slow on large datasets\n",
+        "   - Define explicit schemas for production workloads\n",
+        "   - Use appropriate data types to avoid type conversions\n",
+        "\n",
+        "4. **File handling:**\n",
+        "   - Use `multiLine` option for multi-line JSON files\n",
+        "   - Consider partitioning for large JSON datasets\n",
+        "   - Use Parquet instead of JSON for better performance in analytical workloads"
+      ]
+    }
+  ],
+  "metadata": {
+    "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3"
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.10.0"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 4
+} 
