@@ -91,6 +91,13 @@ The environment includes several notebooks covering different aspects of PySpark
    - Identifying bottlenecks and optimization opportunities
    - Analyzing memory usage, shuffles, and data skew
 
+9. **09-Spark-SQL-Guide.ipynb**
+   - SQL query basics and best practices
+   - Creating and using temporary views and tables
+   - Advanced SQL features: window functions, CTEs, and subqueries
+   - UDFs in SQL context and performance considerations
+   - Optimization techniques specific to Spark SQL
+
 ## Working with Notebooks
 
 - **Running a cell**: Click a cell and press `Shift+Enter`
@@ -169,7 +176,8 @@ If you're new to PySpark, we recommend this learning path:
 2. Move to **06-File-Formats.ipynb** to understand data loading and saving
 3. Continue with **04-JSON-Processing.ipynb** and **03-Flatten-Complex-Objects.ipynb** for data structures
 4. Study **02-PySpark-Best-Practices.ipynb** for optimization tips
-5. Explore **00-PySpark-Internals.ipynb** for a deep dive into how Spark works
-6. Finally, use **08-Spark-UI-Guide.ipynb** to learn how to monitor and debug your PySpark applications
+5. Explore **09-Spark-SQL-Guide.ipynb** for SQL operations and optimization
+6. Dive into **00-PySpark-Internals.ipynb** for how Spark works under the hood
+7. Finally, use **08-Spark-UI-Guide.ipynb** to learn how to monitor and debug your applications
 
 Happy learning! 
